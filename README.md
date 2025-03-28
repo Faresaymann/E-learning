@@ -36,20 +36,17 @@ This repository contains the **backend** for the TechTonic E-Learning platform, 
 ## How to Run Locally
     Ensure MongoDB is running locally or have access to a MongoDB Atlas instance.
     Start the server with:
+      ``` bash
+      npm run dev
+      ```
+      (assuming you have a dev script configured with tools like nodemon).
 
-``` bash
-npm run dev
-```
-(assuming you have a dev script configured with tools like nodemon).
-
-Test the API:
-
-  Use a tool like Postman or cURL to test endpoints:
-
-    Sign Up: POST /api/auth/signup
-    Log In: POST /api/auth/login
-    View Courses: GET /api/courses
-    Enroll: POST /api/enrollments
+      Test the API:
+       Use a tool like Postman or cURL to test endpoints:
+          Sign Up: POST /api/auth/signup
+          Log In: POST /api/auth/login
+          View Courses: GET /api/courses
+          Enroll: POST /api/enrollments
     
 ## File Structure
     A possible file structure:
