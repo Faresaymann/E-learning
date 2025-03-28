@@ -40,8 +40,6 @@ This repository contains the **backend** for the TechTonic E-Learning platform, 
  ``` bash
  npm run dev
  ```
-      (assuming you have a dev script configured with tools like nodemon).
-
       Test the API:
        Use a tool like Postman or cURL to test endpoints:
           Sign Up: POST /api/auth/signup
