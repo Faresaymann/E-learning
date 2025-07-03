@@ -179,7 +179,7 @@ const getAllCourses = asyncHandler(async (req, res) => {
       $project: {
         _id: 1,
         title: 1,
-        thumbnail: 1, //{ $ifNull: ['$price.amount', 0] }
+        thumbnail: 1, 
         price: {
           amount: { $ifNull: ["$price.amount", 0] },
           currency: { $ifNull: ["$price.currency", "EGP"] },

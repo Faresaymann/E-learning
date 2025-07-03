@@ -1,6 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const sharp = require("sharp");
 const { v4: uuid } = require("uuid");
+const mongoose = require("mongoose");
 const ApiFeatures = require("../services/api-features.service");
 const User = require("../models/user.model");
 const UserCredential = require("../models/userCredential.model");
@@ -138,6 +139,8 @@ exports.getUser = getOne(User);
  * @access private [admin]
  */
 exports.updateUser = asyncHandler(async (req, res, next) => {
+  //just checking
+  console.log(req.body);
   try {
     // 1- Update userCredentials for provider id and return data after update (new one)
     if (req.body.email) {
@@ -147,7 +150,6 @@ exports.updateUser = asyncHandler(async (req, res, next) => {
         { new: true }
       );
     }
-
     const userId = req.params.id;
     // 2- Fetch the existing user data from the database
     const existingUser = await User.findById(userId);
@@ -320,7 +322,25 @@ exports.updateLoggedUser = asyncHandler(async (req, res, next) => {
   // 1- set params.id to logged user id
   req.params.id = req.user._id;
 
-  // 2- go to updateUser
+  // 2- Filter request body to only allow name and gender updates
+  const allowedFields = ["name", "gender"];
+  const filteredBody = {};
+
+  Object.keys(req.body).forEach((key) => {
+    if (allowedFields.includes(key)) {
+      filteredBody[key] = req.body[key];
+    }
+  });
+
+  // 3- If there's a profile image in the request, keep it
+  if (req.body.profileImage) {
+    filteredBody.profileImage = req.body.profileImage;
+  }
+
+  // 4- Replace the request body with the filtered one
+  req.body = filteredBody;
+
+  // 5- go to updateUser
   next();
 });
 
@@ -334,7 +354,8 @@ exports.updateLoggedUserPassword = asyncHandler(async (req, res, next) => {
   const user = await UserCredential.findOne({ user: req.user._id });
 
   // 2- check if old password is correct
-  if (!(await user.comparePassword(req.body.oldPassword))) next(unAuthorized());
+  if (!(await user.comparePassword(req.body.oldPassword)))
+    return next(unAuthorized({ message: "Incorrect password" }));
   console.log("old password: " + req.body.oldPassword + " is true");
 
   // 3- update user password and password changed at and empty all tokens
@@ -383,7 +404,6 @@ exports.deleteLoggedUser = asyncHandler(async (req, res) => {
   res.status(statusCode).json(body);
 });
 
-
 /**
  * @description get all instructors
  * @route GET /api/v1/users/instructors
@@ -418,6 +438,254 @@ exports.getInstructors = asyncHandler(async (req, res) => {
   // Send response with instructors data and pagination result
   const { body, statusCode } = success({
     data: { results: documents, paginationResult },
+  });
+  res.status(statusCode).json(body);
+});
+
+/**
+ * @description get top instructors by their course ratings
+ * @route GET /api/v1/users/top-instructors
+ * @access public
+ */
+exports.getTopInstructors = asyncHandler(async (req, res) => {
+  // Get minimum rating from query params or default to 4.5
+  const minRating = req.query.minRating ? parseFloat(req.query.minRating) : 4.5;
+
+  // Aggregate to find instructors with their average course ratings
+  const topInstructors = await User.aggregate([
+    // Match only users with Instructor role
+    { $match: { roles: "Instructor" } },
+
+    // Lookup courses taught by each instructor
+    {
+      $lookup: {
+        from: "courses",
+        localField: "_id",
+        foreignField: "instructor",
+        as: "courses",
+      },
+    },
+
+    // Filter out instructors with no courses or unpublished courses
+    { $match: { courses: { $ne: [] } } },
+
+    // Calculate average rating across all courses for each instructor
+    {
+      $addFields: {
+        averageRating: { $avg: "$courses.ratingsAverage" },
+        totalCourses: { $size: "$courses" },
+        totalStudents: {
+          $sum: { $size: { $ifNull: ["$courses.enrolledUsers", []] } },
+        },
+      },
+    },
+
+    // Filter instructors by minimum rating
+    { $match: { averageRating: { $gte: minRating } } },
+
+    // Sort by average rating (highest first)
+    { $sort: { averageRating: -1 } },
+
+    // Project only needed fields
+    {
+      $project: {
+        _id: 1,
+        name: 1,
+        email: 1,
+        profileImage: 1,
+        jobTitle: 1,
+        jobDescription: 1,
+        bio: 1,
+        facebookUrl: 1,
+        linkedinUrl: 1,
+        instagramUrl: 1,
+        averageRating: { $round: ["$averageRating", 1] },
+        totalCourses: 1,
+        totalStudents: 1,
+      },
+    },
+  ]);
+
+  // Ensure each instructor has a profile image
+  const instructorsWithDefaultImage = topInstructors.map((instructor) => {
+    if (!instructor.profileImage) {
+      instructor.profileImage =
+        "https://res.cloudinary.com/dcjrolufm/image/upload/v1711983058/defaults/rrn916ctapttfi2tsrtj.png";
+    }
+    return instructor;
+  });
+
+  // Send response with top instructors data
+  const { body, statusCode } = success({
+    data: { results: instructorsWithDefaultImage },
+  });
+  res.status(statusCode).json(body);
+});
+
+/**
+ * @description get instructor profile with detailed information
+ * @route GET /api/v1/users/instructor-profile/?instructorId=id
+ * @access public
+ */
+exports.getInstructorProfile = asyncHandler(async (req, res, next) => {
+  const instructorId = req.query.instructorId;
+
+  // Check if instructor exists and has the Instructor role
+  const instructor = await User.findOne({
+    _id: instructorId,
+    roles: "Instructor",
+  });
+
+  if (!instructor) {
+    return next(
+      recordNotFound({
+        message: `Instructor with id ${instructorId} not found`,
+      })
+    );
+  }
+
+  // Aggregate to get instructor details with course and student information
+  const instructorProfile = await User.aggregate([
+    // Match the specific instructor by ID
+    { $match: { _id: new mongoose.Types.ObjectId(instructorId) } },
+
+    // Lookup courses taught by the instructor
+    {
+      $lookup: {
+        from: "courses",
+        localField: "_id",
+        foreignField: "instructor",
+        as: "courses",
+      },
+    },
+
+    // Lookup reviews for all courses taught by the instructor
+    {
+      $lookup: {
+        from: "reviews",
+        let: { courseIds: "$courses._id" },
+        pipeline: [
+          { $match: { $expr: { $in: ["$course", "$$courseIds"] } } },
+          {
+            $lookup: {
+              from: "users",
+              localField: "user",
+              foreignField: "_id",
+              as: "userDetails",
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              comment: 1,
+              rate: 1,
+              course: 1,
+              createdAt: 1,
+              user: { $arrayElemAt: ["$userDetails", 0] },
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              comment: 1,
+              rate: 1,
+              course: 1,
+              createdAt: 1,
+              "user._id": 1,
+              "user.name": 1,
+              "user.profileImage": 1,
+            },
+          },
+        ],
+        as: "allReviews",
+      },
+    },
+
+    // Calculate statistics across all courses
+    {
+      $addFields: {
+        averageRating: { $avg: "$courses.ratingsAverage" },
+        totalCourses: { $size: "$courses" },
+        totalStudents: {
+          $sum: {
+            $map: {
+              input: "$courses",
+              as: "c",
+              in: { $size: { $ifNull: ["$$c.enrolledUsers", []] } }
+            }
+          }
+        },
+        // Get course IDs for further lookups
+        courseIds: {
+          $map: { input: "$courses", as: "course", in: "$$course._id" },
+        },
+        // Calculate total reviews across all courses
+        totalReviews: { $size: "$allReviews" },
+      },
+    },
+
+    // Project instructor profile fields
+    {
+      $project: {
+        _id: 1,
+        name: 1,
+        email: 1,
+        profileImage: 1,
+        jobTitle: 1,
+        jobDescription: 1,
+        bio: 1,
+        facebookUrl: 1,
+        linkedinUrl: 1,
+        instagramUrl: 1,
+        averageRating: { $round: [{ $ifNull: ["$averageRating", 0] }, 1] },
+        totalCourses: 1,
+        totalStudents: 1,
+        totalReviews: 1,
+        courseIds: 1,
+        courses: {
+          $map: {
+            input: "$courses",
+            as: "course",
+            in: {
+              _id: "$$course._id",
+              title: "$$course.title",
+              thumbnail: "$$course.thumbnail",
+              ratingsAverage: "$$course.ratingsAverage",
+              ratingsQuantity: "$$course.ratingsQuantity",
+              price: "$$course.price",
+              enrolledCount: {
+                $size: { $ifNull: ["$$course.enrolledUsers", []] },
+              },
+              level: "$$course.level",
+            },
+          },
+        },
+        reviews: "$allReviews",
+      },
+    },
+  ]);
+
+  // If no profile was found or the aggregation returned empty
+  if (!instructorProfile || instructorProfile.length === 0) {
+    return next(
+      recordNotFound({
+        message: `Could not retrieve profile for instructor with id ${instructorId}`,
+      })
+    );
+  }
+
+  // Get the instructor profile from the aggregation result
+  const profile = instructorProfile[0];
+
+  // Ensure instructor has a profile image
+  if (!profile.profileImage) {
+    profile.profileImage =
+      "https://res.cloudinary.com/dcjrolufm/image/upload/v1711983058/defaults/rrn916ctapttfi2tsrtj.png";
+  }
+
+  // Send response with instructor profile data
+  const { body, statusCode } = success({
+    data: profile,
   });
   res.status(statusCode).json(body);
 });

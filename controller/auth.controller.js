@@ -104,11 +104,14 @@ exports.register = asyncHandler(async function (req, res) {
   setRefreshTokenCookie(res, refreshToken);
 
   // 6- send access token and user data as response
-  const { statusCode, body } = success({
-    message: `welcome ${user.name}.let's begin our journey`,
-    data: { token: accessToken },
-  });
-  res.status(statusCode).json(body);
+    const { statusCode, body } = success({
+      message: `welcome ${user.name}.let's begin our journey`,
+      data: {
+        token: accessToken,
+        userId: user._id, // added userId to the response
+      },
+    });
+    res.status(statusCode).json(body);
 });
 
 /**
@@ -312,7 +315,8 @@ exports.forgetPassword = asyncHandler(async function (req, res, next) {
   // 7- save changes to database
   await credentials.save();
 
-  // 8- send email to user with password reset code
+
+  /*// 8- send email to user with password reset code
   const mailOptions = {
     to: req.body.email,
     subject: "OTP forgot password",
@@ -323,8 +327,25 @@ exports.forgetPassword = asyncHandler(async function (req, res, next) {
       expire: 20,
     },
   };
-  await sendEmail(mailOptions);
+  await sendEmail(mailOptions);*/
 
+ // 8- send email to user with password reset code
+ try {
+  await sendEmail({
+    to:req.body.email,
+    subject: "OTP forgot password",
+    template: "/views/OTP.ejs",
+    data: {
+      username: credentials.user.name,
+      otp: resetCode,
+      expire: 20,
+    },
+  });
+  console.log(`OTP forgot password email sent to ${req.body.email}`);
+} catch (emailError) {
+  console.error("Error sending OTP forgot password email:", emailError);
+  // Continue with the process even if email fails
+}
   // 9- send response to user
   const { body, statusCode } = success({
     message: "Check your Email for reset code",

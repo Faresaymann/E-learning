@@ -83,7 +83,7 @@ const createModule = async ({ file, name, isFree }) => {
     if (!file || !file.buffer) {
       return reject(new Error("File or file buffer is missing"));
     }
-    
+
     const stream = new Readable();
     stream.push(file.buffer);
     stream.push(null);
@@ -161,7 +161,7 @@ const uploadVideosToCloud = asyncHandler(async (req, res, next) => {
       recordNotFound({ message: `Section with id ${sectionId} not found` })
     );
   }
- 
+
   // Single video/image upload
   if (req.file) {
     try {
@@ -439,6 +439,49 @@ const setFreeNotFree = async (req, res, next) => {
   }
 };
 
+/**
+ * @description get modules by section id
+ * @route GET /api/v1/coursemodule/section/:sectionId
+ * @access private [Instructor, Admin, Student]
+ */
+const getModulesBySectionId = asyncHandler(async (req, res, next) => {
+  try {
+    const sectionId = req.params.sectionId;
+
+    // Check if section exists
+    const section = await Section.findById(sectionId);
+    if (!section) {
+      return next(
+        recordNotFound({ message: `Section with id ${sectionId} not found` })
+      );
+    }
+
+    // Find the section and populate its modules
+    const populatedSection = await Section.findById(sectionId).populate({
+      path: "modules",
+      select: "name file.path isFree duration",
+    });
+
+    if (!populatedSection.modules || populatedSection.modules.length === 0) {
+      return next(
+        recordNotFound({
+          message: `No modules found for section with id ${sectionId}`,
+        })
+      );
+    }
+
+    const { statusCode, body } = success({
+      message: "Modules retrieved successfully",
+      data: populatedSection.modules,
+    });
+
+    res.status(statusCode).json(body);
+  } catch (error) {
+    console.error("Error getting modules by section ID:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
 module.exports = {
   createModule,
   getAllModules,
@@ -451,4 +494,5 @@ module.exports = {
   setFreeNotFree,
   addModuleToSection,
   normalizeDuration,
+  getModulesBySectionId,
 };

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Course Enrollment Confirmation - TechTonic</title>
+    <title>Course Completion Certificate - TechTonic</title>
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
@@ -36,14 +36,15 @@
       </div>
 
       <h2 style="color: #333; margin-top: 20px">
-        Course Enrollment Confirmed!
+        Congratulations on Completing Your Course!
       </h2>
       <p>
-        Congratulations! Your enrollment in
-        <strong><%= courseName %></strong> has been approved.
+        We're thrilled to inform you that you've successfully completed
+        <strong><%= courseName %></strong>. Your dedication and hard work have
+        paid off!
       </p>
 
-      <!-- Course Details -->
+      <!-- Certificate Details -->
       <div
         style="
           background-color: #f9f9f9;
@@ -53,25 +54,21 @@
           text-align: left;
         "
       >
-        <h3 style="margin-top: 0; color: #1a73e8">Course Details:</h3>
+        <h3 style="margin-top: 0; color: #1a73e8">Certificate Details:</h3>
         <p><strong>Course:</strong> <%= courseName %></p>
         <p><strong>Instructor:</strong> <%= instructorName %></p>
-        <% if (transactionPrice) { %>
-          <p>
-            <strong>Amount Paid:</strong>
-            <%= Number(transactionPrice.amount).toLocaleString() %> <%= transactionPrice.currency %>
-          </p>          
-        <% } %>
+        <p><strong>Course Duration:</strong> <%= courseDuration %> hours</p>
+        <p><strong>Completion Date:</strong> <%= completionDate %></p>
       </div>
 
       <p>
-        You can now access all course materials and start learning. We hope you
-        enjoy the course!
+        Your certificate of completion is attached to this email. You can also
+        access it through your profile on our platform.
       </p>
 
       <div style="margin-top: 30px">
         <a
-          href="#"
+          href="<%= certificateUrl %>"
           style="
             background-color: #1a73e8;
             color: white;
@@ -79,10 +76,18 @@
             text-decoration: none;
             border-radius: 5px;
             font-weight: bold;
+            margin-right: 10px;
           "
-          >Start Learning Now</a
+          target="_blank"
+          download="certificate.pdf"
+          >View Certificate</a
         >
       </div>
+
+      <p style="margin-top: 20px">
+        Continue your learning journey with us by exploring more courses on our
+        platform!
+      </p>
 
       <div
         style="
@@ -94,7 +99,7 @@
         "
       >
         <p>
-          If you have any questions about your enrollment, please contact our
+          If you have any questions about your certificate, please contact our
           support team.
         </p>
         <p>

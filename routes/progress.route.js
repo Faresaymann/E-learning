@@ -1,6 +1,7 @@
 const { Router } = require("express");
 const {
-    updateProgress
+  updateProgress,
+  getProgressByCourse
 } = require("../controller/progress.controller");
 
 
@@ -10,7 +11,9 @@ const router = Router();
 // protected
 router.use(protect);
 router
-  .route("/")
-  .post(updateProgress)
+.route("/")
+.post(updateProgress)
+
+router.get('/:courseId', getProgressByCourse);
 
 module.exports = router;

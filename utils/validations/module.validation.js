@@ -38,3 +38,8 @@ exports.deleteModuleValidator = [
   param("id").isMongoId().withMessage("Invalid module ID"),
   validatorMiddleware,
 ];
+
+exports.getModulesBySectionIdValidator = [
+  param("sectionId").isMongoId().withMessage("Invalid section ID"),
+  validatorMiddleware,
+];

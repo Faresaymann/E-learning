@@ -1,5 +1,5 @@
 const asyncHandler = require("express-async-handler");
-const { recordNotFound, } = require("../utils/response/errors");
+const { recordNotFound } = require("../utils/response/errors");
 const { success } = require("../utils/response/response");
 
 //import createModule from module controller
@@ -7,9 +7,12 @@ const { createModule } = require("./module.controller");
 const Section = require("../models/section.model");
 //const Modules = require("../models/Module.model");
 
-const { Module } = require("../models/Module.model")
-const { uploadMix, uploadFilesToCloudinary } = require("../services/file-upload.service")
-const Course = require("../models/Course.model")
+const { Module } = require("../models/Module.model");
+const {
+  uploadMix,
+  uploadFilesToCloudinary,
+} = require("../services/file-upload.service");
+const Course = require("../models/Course.model");
 const uploadModuleVideos = uploadMix([{ name: "file" }]);
 
 const uploadVideosToCloud = asyncHandler(async (req, res, next) => {
@@ -18,7 +21,10 @@ const uploadVideosToCloud = asyncHandler(async (req, res, next) => {
     const veds = req.files.file;
     const uploadPromises = veds.map((v) => {
       return uploadFilesToCloudinary(v.buffer, "modules").then((result) => {
-        req.body.file.push({ path: result.secure_url, filename: result.public_id });
+        req.body.file.push({
+          path: result.secure_url,
+          filename: result.public_id,
+        });
       });
     });
     await Promise.all(uploadPromises);
@@ -50,7 +56,7 @@ const createSection = asyncHandler(async (req, res) => {
 });
 
 const getAllSections = asyncHandler(async (req, res, next) => {
-  const sections = await Section.find().populate('modules', 'name');
+  const sections = await Section.find().populate("modules", "name");
   if (!sections) {
     return next(recordNotFound({ message: `no section is found` }));
   }
@@ -64,8 +70,8 @@ const getAllSections = asyncHandler(async (req, res, next) => {
 const getSectionByid = asyncHandler(async (req, res) => {
   const sectionId = req.params.id;
   const section = await Section.findById(sectionId).populate({
-    path: 'modules',
-    select: 'name file.path isFree'
+    path: "modules",
+    select: "name file.path isFree",
   });
 
   const { body, statusCode } = success({
@@ -76,23 +82,29 @@ const getSectionByid = asyncHandler(async (req, res) => {
 
 const updateCourseDuration = async (courseId) => {
   const course = await Course.findById(courseId).populate({
-    path: 'sections',
+    path: "sections",
     populate: {
-      path: 'modules'
-    }
+      path: "modules",
+    },
   });
 
-  let totalHours = 0, totalMinutes = 0, totalSeconds = 0;
+  let totalHours = 0,
+    totalMinutes = 0,
+    totalSeconds = 0;
 
-  course.sections.forEach(section => {
-    section.modules.forEach(module => {
+  course.sections.forEach((section) => {
+    section.modules.forEach((module) => {
       totalHours += module.duration.hours;
       totalMinutes += module.duration.minutes;
       totalSeconds += module.duration.seconds;
     });
   });
 
-  const { hours, minutes, seconds } = normalizeDuration(totalHours, totalMinutes, totalSeconds);
+  const { hours, minutes, seconds } = normalizeDuration(
+    totalHours,
+    totalMinutes,
+    totalSeconds
+  );
 
   course.duration = { hours, minutes, seconds };
   await course.save();
@@ -107,7 +119,7 @@ const updateSection = asyncHandler(async (req, res, next) => {
         sectionId,
         { title: req.body.title },
         { new: true }
-      ).populate('modules', ' -id name');
+      ).populate("modules", " -id name");
 
       const { statusCode, body } = success({
         message: "Section updated successfully without files",
@@ -120,7 +132,9 @@ const updateSection = asyncHandler(async (req, res, next) => {
     const sec = await Section.findById(sectionId);
 
     if (!sec) {
-      return next(recordNotFound({ message: `No section with id ${sectionId}` }));
+      return next(
+        recordNotFound({ message: `No section with id ${sectionId}` })
+      );
     }
 
     const moduleIds = sec.modules;
@@ -140,11 +154,17 @@ const updateSection = asyncHandler(async (req, res, next) => {
         totalSeconds += module.duration.seconds;
       } else {
         console.error(`Failed to create module for file: ${file.originalname}`);
-        return res.status(500).json({ message: `Failed to create module for file: ${file.originalname}` });
+        return res.status(500).json({
+          message: `Failed to create module for file: ${file.originalname}`,
+        });
       }
     }
 
-    const { hours, minutes, seconds } = normalizeDuration(totalHours, totalMinutes, totalSeconds);
+    const { hours, minutes, seconds } = normalizeDuration(
+      totalHours,
+      totalMinutes,
+      totalSeconds
+    );
 
     const updatedSection = await Section.findByIdAndUpdate(
       sectionId,
@@ -153,7 +173,7 @@ const updateSection = asyncHandler(async (req, res, next) => {
         sectionDuration: { hours, minutes, seconds },
       },
       { new: true }
-    ).populate('modules', 'name');
+    ).populate("modules", "name");
 
     // Update course duration
     await updateCourseDuration(updatedSection.courseId);
@@ -165,15 +185,15 @@ const updateSection = asyncHandler(async (req, res, next) => {
 
     res.status(statusCode).json(body);
   } catch (error) {
-    console.error('Error updating section:', error);
-    res.status(500).json({ message: 'Internal Server Error' });
+    console.error("Error updating section:", error);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 });
 /**
-* @description delete section
-* @route DELETE /api/v1/section
-* @access private [Instructor, Admin]
-*/
+ * @description delete section
+ * @route DELETE /api/v1/section
+ * @access private [Instructor, Admin]
+ */
 const deleteSection = asyncHandler(async (req, res, next) => {
   try {
     // 1- Get section by id
@@ -181,8 +201,10 @@ const deleteSection = asyncHandler(async (req, res, next) => {
     const section = await Section.findById(sectionId);
     // 2- check if section exists
     if (!section) {
-      console.log(section)
-      return next(recordNotFound({ message: `section with id ${sectionId} is not found` }));
+      console.log(section);
+      return next(
+        recordNotFound({ message: `section with id ${sectionId} is not found` })
+      );
     }
 
     // 3- Get associated module IDs
@@ -207,19 +229,19 @@ const deleteSection = asyncHandler(async (req, res, next) => {
 
     // 7- Send response back
     const { statusCode, body } = success({
-      message: 'Section and associated modules deleted successfully',
+      message: "Section and associated modules deleted successfully",
     });
     res.status(statusCode).json(body);
   } catch (error) {
-    console.error('Error deleting section:', error);
-    return res.status(500).json({ message: 'Internal Server Error' });
+    console.error("Error deleting section:", error);
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
 /**
-* @description update sectionDuration
-* @route PUT /api/v1/section/calculate-duration/:id
-*/
+ * @description update sectionDuration
+ * @route PUT /api/v1/section/calculate-duration/:id
+ */
 const secDuration = asyncHandler(async (req, res, next) => {
   try {
     console.log("helllloooooo");
@@ -227,20 +249,26 @@ const secDuration = asyncHandler(async (req, res, next) => {
     console.log("secID: " + secID);
 
     // get section by id
-    const section = await Section.findById(secID).populate('modules');
+    const section = await Section.findById(secID).populate("modules");
     console.log(section);
 
     // extract module's id
     const modulesId = section.modules;
     console.log(modulesId);
 
-    let hours = 0, minutes = 0, seconds = 0;
+    let hours = 0,
+      minutes = 0,
+      seconds = 0;
 
     // Iterate through each module in the section
     for (const module of section.modules) {
       if (module) {
         // extract module hours, minutes, and seconds
-        const { hours: modHours, minutes: modMinutes, seconds: modSeconds } = module.duration;
+        const {
+          hours: modHours,
+          minutes: modMinutes,
+          seconds: modSeconds,
+        } = module.duration;
         // sum duration
         hours += modHours;
         minutes += modMinutes;
@@ -259,12 +287,58 @@ const secDuration = asyncHandler(async (req, res, next) => {
 
     // Send response back
     const { statusCode, body } = success({
-      message: 'Section duration calculated successfully',
-      data: section.sectionDuration
+      message: "Section duration calculated successfully",
+      data: section.sectionDuration,
     });
     res.status(statusCode).json(body);
   } catch (error) {
     next(error);
+  }
+});
+
+/**
+ * @description get sections by course id
+ * @route GET /api/v1/section/course/:courseId
+ * @access private [Instructor, Admin, Student]
+ */
+const getSectionsByCourseId = asyncHandler(async (req, res, next) => {
+  try {
+    // Get courseId from either params, query parameters, or body
+    // Prioritize query parameter for the format /v1/section/course?courseId=xxx
+    const courseId =
+      req.query.courseId || req.params.courseId || req.body.courseId;
+
+    if (!courseId) {
+      return next(
+        recordNotFound({
+          message: `Course ID is required`,
+        })
+      );
+    }
+
+    // Find sections by courseId and populate modules
+    const sections = await Section.find({ courseId }).populate({
+      path: "modules",
+      select: "name file.path isFree duration",
+    });
+
+    if (!sections || sections.length === 0) {
+      return next(
+        recordNotFound({
+          message: `No sections found for course with id ${courseId}`,
+        })
+      );
+    }
+
+    const { statusCode, body } = success({
+      message: "Sections retrieved successfully",
+      data: sections,
+    });
+
+    res.status(statusCode).json(body);
+  } catch (error) {
+    console.error("Error getting sections by course ID:", error);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
@@ -276,5 +350,6 @@ module.exports = {
   deleteSection,
   uploadModuleVideos,
   uploadVideosToCloud,
-  secDuration
-}
+  secDuration,
+  getSectionsByCourseId,
+};

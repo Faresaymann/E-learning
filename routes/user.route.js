@@ -16,8 +16,8 @@ const {
   uploadProfileImage,
   resizeProfileImage,
   getInstructors,
-  getInstrucotrPage,
-  getUserByEmail,
+  getTopInstructors,
+  getInstructorProfile,
 } = require("../controller/user.controller");
 const { protect, allowedRoles } = require("../services/auth.service");
 const {
@@ -25,7 +25,7 @@ const {
   deleteUserValidator,
   getUserValidator,
   updateLoggedUserPasswordValidator,
-  // updateLoggedUserValidator,
+  updateLoggedUserValidator,
   updateUserPasswordValidator,
   updateUserValidator,
 } = require("../utils/validations/user.validation");
@@ -34,13 +34,18 @@ const router = Router();
 
 // protected
 router.use(protect);
+// Route to get top instructors by course ratings
+router.route("/top-instructors").get(getTopInstructors);
 
+
+// Route to get instructor profile with detailed information
+router.route("/instructor-profile").get(getInstructorProfile);
 router.get("/getMe", getLoggedUser, getUser);
 router.put(
   "/updateMe",
   uploadProfileImage,
   resizeProfileImage,
-  //updateLoggedUserValidator,
+  updateLoggedUserValidator,
   updateLoggedUser,
   updateUser
 );
@@ -51,13 +56,12 @@ router.put(
 );
 router.delete("/deleteMe", deleteLoggedUser);
 
-const { getInstructorPage } = require("../controller/instructor.controller");
-
-
+router
+  .route("/:id")
+  .put(uploadProfileImage, resizeProfileImage, updateUserValidator, updateUser)
 
 // private [admin]
 router.use(allowedRoles("Admin"));
-
 
 router
   .route("/")
@@ -69,17 +73,13 @@ router
     createUser
   );
 
-// Route to get only instructors 
-router
-  .route("/instructors")
-  .get(protect, getInstructors);
-
+// Route to get only instructors
+router.route("/instructors").get(protect, getInstructors);
 
 
 router
   .route("/:id")
   .get(getUserValidator, getUser)
-  .put(uploadProfileImage, resizeProfileImage, updateUserValidator, updateUser)
   .delete(deleteUserValidator, deleteUser);
 
 router.put(

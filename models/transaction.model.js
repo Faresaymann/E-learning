@@ -46,12 +46,12 @@ const purchaseRequestSchema = new mongoose.Schema(
     paymentReceiptImage:
     {
       type: String,
-      default: "https://res.cloudinary.com/djcwvsuw1/image/upload/v1716994219/transaction/transaction-4bd47935-e7bf-42db-a4ea-cc82b6730a40-1716994217786.jpeg.jpg"
+      //default: "https://res.cloudinary.com/djcwvsuw1/image/upload/v1716994219/transaction/transaction-4bd47935-e7bf-42db-a4ea-cc82b6730a40-1716994217786.jpeg.jpg"
     },
     status: {
       type: String,
       enum: ["Pending", "Approved", "Rejected"],
-      default: "Pending",
+      default: "Approved",
     },
     rejectionReason: {
       type: String,

@@ -2,8 +2,7 @@ const { body, param } = require("express-validator");
 const validatorMiddleware = require("../../middleware/validatorMiddleware");
 const Review = require("../../models/review.model");
 exports.createReviewValidator = [
-  body("comment")
-    .optional(),
+  body("comment").optional(),
   body("rate")
     .notEmpty()
     .withMessage("ratings value required")
@@ -14,7 +13,7 @@ exports.createReviewValidator = [
     .withMessage("Invalid courses id format")
     .custom((val, { req }) =>
       // Check if logged user create review before
-      Review.findOne({ user: req.user._id, service: val }).then((review) => {
+      Review.findOne({ user: req.user._id, course: val }).then((review) => {
         if (review) {
           return Promise.reject(
             new Error("You already created a review before")
@@ -82,5 +81,10 @@ exports.deleteReviewValidator = [
       }
       return true;
     }),
+  validatorMiddleware,
+];
+
+exports.getCourseReviewsValidator = [
+  param("courseId").isMongoId().withMessage("Invalid Course id format"),
   validatorMiddleware,
 ];

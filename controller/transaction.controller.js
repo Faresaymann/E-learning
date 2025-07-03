@@ -81,13 +81,13 @@ const convertToEGP = (amount, currency) => {
 };
 
 /**
- * @description create a new paymentReceipt transaction
+ * @description create and auto-approve a transaction for course enrollment
  * @route POST /api/v1/transaction
  * @access private [User]
  */
 const createTransaction = asyncHandler(async (req, res, next) => {
   try {
-    const { phoneNumber, paymentReceiptImage, courseId, couponCode } = req.body;
+    const { phoneNumber, courseId, couponCode } = req.body;
     const userId = req.user._id;
 
     // Check for existing approved transactions
@@ -103,23 +103,11 @@ const createTransaction = asyncHandler(async (req, res, next) => {
       );
     }
 
-    // Check for existing pending transactions
-    const existingPendingTransaction = await Transaction.findOne({
-      userId,
-      courseId,
-      status: "Pending",
-    });
-
-    if (existingPendingTransaction) {
-      return next(
-        validationError({
-          message: "You already have a pending transaction for this course.",
-        })
-      );
-    }
-
     // Find the course by ID
-    const course = await Course.findById(courseId);
+    const course = await Course.findById(courseId).populate(
+      "instructor",
+      "name"
+    );
     if (!course) {
       return next(recordNotFound({ message: "Course not found" }));
     }
@@ -177,35 +165,98 @@ const createTransaction = asyncHandler(async (req, res, next) => {
     transactionPriceInEGP = Math.round(transactionPriceInEGP);
     discountAmountInEGP = Math.round(discountAmountInEGP);
 
-    // Create the transaction
+    // Create the transaction with status already set to "Approved"
     const transaction = await Transaction.create({
       phoneNumber,
       transactionPrice: { amount: transactionPriceInEGP, currency: "EGP" },
       coursePrice: course.price,
       courseId,
-      paymentReceiptImage: paymentReceiptImage,
       userId,
       coupon: coupon ? coupon._id : null,
       discountAmount: discountAmountInEGP,
+      status: "Approved",
+      enrolled: true,
     });
 
     // Update the User and Course models
     await User.findByIdAndUpdate(userId, {
-      $push: { transactions: transaction._id },
+      $push: {
+        transactions: transaction._id,
+        enrolledCourses: courseId,
+      },
     });
+
+    // Add user to enrolled users
+    course.enrolledUsers.push(userId);
+
+    // Calculate course profits in EGP
+    const coursePriceInEGP = convertToEGP(
+      course.price.amount,
+      course.price.currency
+    );
+    const taxes = Math.round(coursePriceInEGP * 0.05);
+    course.profits += Math.round(coursePriceInEGP - taxes);
+
+    // Update the Course model
     await Course.findByIdAndUpdate(courseId, {
       $push: { transactions: transaction._id },
+      enrolledUsers: course.enrolledUsers,
+      profits: course.profits,
     });
+
+    // Get the total number of enrolled students
+    const enrolledStudentsCount = course.enrolledUsers.length;
+
+    // Update instructor's profits in EGP
+    const instructor = await User.findById(course.instructor);
+    instructor.profits += Math.round(
+      coursePriceInEGP - coursePriceInEGP * instructor.platformFee - taxes
+    );
+    await instructor.save();
+
+    // Update coupon usage if a coupon was used
+    if (transaction.coupon) {
+      await Coupon.findByIdAndUpdate(transaction.coupon, {
+        $inc: { uses: 1 },
+      });
+    }
+
+    // Get user information for email
+    const user = await User.findById(userId);
+    if (!user) {
+      return next(recordNotFound({ message: "User not found" }));
+    }
+
+    // Send email notification to the user
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Course Enrollment Confirmation",
+        template: "/views/TransactionComplete.ejs",
+        data: {
+          courseName: course.title,
+          instructorName: instructor.name,
+          transactionPrice: transaction.transactionPrice,
+        },
+      });
+      console.log(`Enrollment confirmation email sent to ${user.email}`);
+    } catch (emailError) {
+      console.error("Error sending enrollment confirmation email:", emailError);
+      // Continue with the process even if email fails
+    }
 
     // Send success response
     const { statusCode, body } = success({
-      data: transaction,
-      message: "Transaction created successfully. Pending approval.",
+      message: "You've successfully enrolled in this course",
+      data: {
+        transaction,
+        enrolledStudentsCount,
+      },
     });
     res.status(statusCode).json(body);
   } catch (error) {
     return next(
-      failure({ message: "Error creating transaction: " + error.message })
+      failure({ message: "Error processing enrollment: " + error.message })
     );
   }
 });
@@ -485,6 +536,63 @@ const rejectTransaction = asyncHandler(async (req, res, next) => {
  */
 const deleteTransaction = factory.deleteOne(Transaction);
 
+
+/**
+ * @description Get all transactions for a specific user
+ * @route       GET /api/v1/transaction/user
+ * @access      private [User]
+ */
+/**
+ * @description Get all transactions for a specific user
+ * @route       GET /api/v1/transaction/user
+ * @access      private [User]
+ */
+const getTransactionsByUserId = asyncHandler(async (req, res, next) => {
+  try {
+    const userId = req.user._id; // from auth middleware
+
+    const transactions = await Transaction.find({ userId })
+      .populate({ path: "courseId", select: "title price category thumbnail" })
+      .populate({ path: "userId",   select: "name email phoneNumber" })
+      .sort({ createdAt: -1 });
+
+    if (!transactions.length) {
+      const { statusCode, body } = success({
+        message: "No transactions found for this user",
+        data: [],
+      });
+      return res.status(statusCode).json(body);
+    }
+
+    const formattedTransactions = transactions.map(tx => ({
+      transactionId:     tx._id,               // transaction ID
+      courseTitle:       tx.courseId.title,
+      courseCategory:    tx.courseId.category,
+      coursePrice:       tx.courseId.price,
+      courseImage:       tx.courseId.thumbnail,
+      userName:          tx.userId.name,
+      userEmail:         tx.userId.email,
+      //userPhone:         tx.userId.phoneNumber,
+      purchasePhone:     tx.phoneNumber,       // phone used for this transaction
+      transactionPrice:  tx.transactionPrice,  // what the user actually paid
+      discountAmount:    tx.discountAmount,
+      status:            tx.status,
+      enrolled:          tx.enrolled,
+      createdAt:         tx.createdAt,
+    }));
+
+    const { statusCode, body } = success({ data: formattedTransactions });
+    res.status(statusCode).json(body);
+
+  } catch (error) {
+    console.error("getTransactionsByUserId error:", error);
+    next(failure({ message: "Error retrieving user transactions" }));
+  }
+});
+
+
+
+
 module.exports = {
   resizepaymentReceiptImage,
   uploadpaymentReceiptImage,
@@ -495,4 +603,5 @@ module.exports = {
   getOneTransaction,
   calculateProfits,
   deleteTransaction,
+  getTransactionsByUserId,
 };

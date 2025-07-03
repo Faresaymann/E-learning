@@ -1,7 +1,7 @@
 const multer = require("multer");
 const { v4: uuid } = require("uuid");
 const cloudinary = require("../config/cloudinary");
-
+const streamifier = require("streamifier");
 const { validationError } = require("../utils/response/errors");
 
 const storage = multer.memoryStorage();
@@ -14,7 +14,7 @@ const filter = function (req, file, cb) {
     "video/mp4",
     "application/pdf",
     "application/vnd.ms-powerpoint",
-    'application/octet-stream'
+    "application/octet-stream",
   ];
 
   // Check if the file type is allowed
@@ -55,20 +55,39 @@ exports.uploadToCloudinary = async (fileBuffer, filename, folder = "") => {
   });
 };
 
-exports.uploadCertificateToCloudnary = async (fileBuffer, filename, folder = "") => {
-  try {
-    const uploadResult = await cloudinary.uploader.upload_stream({
-      public_id: filename,
-      folder: folder,
-      resource_type: "auto",
-    }).then((result) => result).catch((error) => {
-      throw new Error(`Cloudinary upload failed: ${error.message}`); // Handle Cloudinary errors
-    });
-    return uploadResult;
-  } catch (error) {
-    console.error(`Error uploading certificate: ${error.message}`);
-    throw error; // Re-throw the error for proper handling
-  }
+/**
+ * Uploads a PDF certificate to Cloudinary with proper encoding
+ * @param {Buffer} pdfBuffer - The PDF file as a buffer
+ * @param {string} folder - The folder to upload to in Cloudinary
+ * @param {string} userId - User ID for folder structure
+ * @param {string} courseId - Course ID for folder structure
+ * @returns {Promise<Object>} - Cloudinary upload result
+ */
+exports.uploadCertificateToCloudinary = (pdfBuffer, folder = "", userId, courseId) => {
+  const publicId = uuid();
+  const folderPath = [folder, userId, courseId].filter(Boolean).join("/");
+
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        public_id: publicId,
+        folder: folderPath,
+        resource_type: "raw",
+        overwrite: true,
+        access_mode: "public",
+        format: "pdf",
+      },
+      (error, result) => {
+        if (error) {
+          console.error("Cloudinary upload error:", error);
+          return reject(error);
+        }
+        resolve(result);
+      }
+    );
+
+    streamifier.createReadStream(pdfBuffer).pipe(uploadStream);
+  });
 };
 
 exports.uploadFilesToCloudinary = async (fileBuffer, folder = "") => {
@@ -91,16 +110,17 @@ exports.uploadFilesToCloudinary = async (fileBuffer, folder = "") => {
   });
 };
 
-exports.uploadCertificateToCloudinary = async (fileBuffer, folder = "", userId, courseId) => {
+exports.uploadVideoToCloudinary = async (fileBuffer, folder = "") => {
   return await new Promise((resolve) => {
-    const pk = `cert-${uuid()}-${userId}-${courseId}-${Date.now()}`;
-
+    const pk = `video-${uuid()}-${Date.now()}`;
+    const pkk = pk.substring(0, 10);
+    console.log("pkk,", pkk);
     cloudinary.uploader
       .upload_stream(
         {
-          public_id: pk,
+          public_id: pkk,
           folder: folder,
-          resource_type: "auto",
+          resource_type: "video",
         },
         (err, uploadResult) => {
           return resolve(uploadResult);
@@ -110,3 +130,22 @@ exports.uploadCertificateToCloudinary = async (fileBuffer, folder = "", userId, 
   });
 };
 
+exports.uploadImageToCloudinary = async (fileBuffer, folder = "") => {
+  return await new Promise((resolve) => {
+    const pk = `image-${uuid()}-${Date.now()}`;
+    const pkk = pk.substring(0, 10);
+    console.log("pkk,", pkk);
+    cloudinary.uploader
+      .upload_stream(
+        {
+          public_id: pkk,
+          folder: folder,
+          resource_type: "image",
+        },
+        (err, uploadResult) => {
+          return resolve(uploadResult);
+        }
+      )
+      .end(fileBuffer);
+  });
+};

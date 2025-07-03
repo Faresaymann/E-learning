@@ -111,7 +111,7 @@ const courseSchema = new mongoose.Schema({
   ],
   publish: {
     type: Boolean,
-    default: false,
+    default: true,//for now
   },
   compiler: {
     type: String,
